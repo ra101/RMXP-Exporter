@@ -1,2 +1,4 @@
 # RMXP Exporter
-A CLI to export a distributable copy of RPG-Maker XP.
+`exporter` streamlines exporting RPG Maker XP projects for distribution.
+  It can create both RGSS-Archives(.rgssad) and Distributable-Packages(.zip)
+  based on specified configurations.

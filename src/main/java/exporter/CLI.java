@@ -17,13 +17,15 @@ public class CLI {
   public static final String VERSION = "2.1.1";
   public static final String DISPLAY_VER = NAME + " v" + VERSION;
   public static final String DESC =
-    "`exporter` is tool for creating a distributable archive of your RPG Maker XP";
+    "`exporter` streamlines exporting RPG Maker XP projects for distribution.\n" +
+    "  It can create both RGSS-Archives(.rgssad) and Distributable-Packages(.zip)\n" +
+    "  based on specified configurations.";
 }
 
 @CommandLine.Command(
   name = CLI.EXENAME,
   subcommands = {
-    EncryptCommand.class, ArchiveCommand.class, ListCommand.class,
+    ArchiveCommand.class, PackageCommand.class, ListCommand.class,
   }
 )
 final class Exporter extends BaseCommand {
@@ -32,33 +34,33 @@ final class Exporter extends BaseCommand {
     names = { "--project", "-d" },
     paramLabel = "<s>",
     scope = CommandLine.ScopeType.INHERIT,
-    description = "RMXP project path. (default: Current Folder)"
+    description = "RMXP project path (def: Current Folder)"
   )
   public Path projectPath;
 
   @CommandLine.Option(
-    names = { "--ignore-file", "-f" },
+    names = { "--config-file", "-f" },
     paramLabel = "<s>",
     scope = CommandLine.ScopeType.INHERIT,
-    description = "Ignore File path. (default: Project\\.exporterignore)"
+    description = "Config file path (def: Project\\.exporterconfig)"
   )
-  public Path ignoreFile;
+  public Path configFile;
 
   @CommandLine.Option(
-    names = { "--output-file", "-o" },
+    names = { "--output-arc", "-o" },
     paramLabel = "<s>",
     scope = CommandLine.ScopeType.INHERIT,
-    description = ".rgssad File path (default: Project\\Game.rgssad)"
+    description = ".rgssad file path (def: Project\\Game.rgssad)"
   )
-  public Path outputFile;
+  public Path outputArc;
 
   @CommandLine.Option(
-    names = { "--output-dir", "-O" },
+    names = { "--output-pak", "-O" },
     paramLabel = "<s>",
     scope = CommandLine.ScopeType.INHERIT,
-    description = "Output Dir for Zip. (default: Project\\Dist)\n"
+    description = ".zip file path (def: Project\\Dist\\Project.zip)\n"
   )
-  public Path outputDir;
+  public Path outputPak;
 
   @CommandLine.Option(
     names = { "--silent", "-s" },
@@ -83,11 +85,15 @@ final class Exporter extends BaseCommand {
     projectPath = projectPath.toAbsolutePath();
     checkPathExists(projectPath);
 
-    ignoreFile = resolveRelPath(ignoreFile, ".exporterignore");
-    checkPathExists(ignoreFile);
+    configFile = resolveRelPath(configFile, ".exporterconfig");
+    checkPathExists(configFile);
 
-    outputFile = resolveRelPath(outputFile, "Game.rgssad");
-    outputDir = resolveRelPath(outputDir, "Dist");
+    outputArc = resolveRelPath(outputArc, "Game.rgssad");
+    outputPak =
+      resolveRelPath(
+        outputPak,
+        String.format("Dist\\%s.zip", projectPath.getFileName().toString())
+      );
   }
 
   Path resolveRelPath(Path argPath, String basename) throws Exception {
@@ -109,7 +115,7 @@ final class Exporter extends BaseCommand {
   public Integer call() throws Exception {
     throw new CommandLine.ParameterException(
       new CommandLine(this),
-      "Error: Either `--encrypt`, `--archive` or `--list-files` must be Specified!\n"
+      "Error: Either `--archive`, `--package` or `--list-files` must be Specified!\n"
     );
   }
 }
@@ -117,7 +123,7 @@ final class Exporter extends BaseCommand {
 @CommandLine.Command(
   name = "--list-files",
   aliases = { "-l" },
-  description = "..."
+  description = "List all [files to be archived] and [files to be packaged] as per Config file."
 )
 final class ListCommand extends BaseSubCommand {
 
@@ -130,11 +136,11 @@ final class ListCommand extends BaseSubCommand {
 }
 
 @CommandLine.Command(
-  name = "--archive",
-  aliases = { "-a" },
-  description = "..."
+  name = "--package",
+  aliases = { "-p" },
+  description = "Create a Distributable Package (.zip) as per Config file.\n"
 )
-final class ArchiveCommand extends BaseSubCommand {
+final class PackageCommand extends BaseSubCommand {
 
   @Override
   public Integer call() throws Exception {
@@ -145,16 +151,16 @@ final class ArchiveCommand extends BaseSubCommand {
 }
 
 @CommandLine.Command(
-  name = "--encrypt",
-  aliases = { "-e" },
-  description = "..."
+  name = "--archive",
+  aliases = { "-a" },
+  description = "Create an RGSS Archive (.rgssad) as per Config file."
 )
-final class EncryptCommand extends BaseSubCommand {
+final class ArchiveCommand extends BaseSubCommand {
 
   @Override
   public Integer call() throws Exception {
     super.call();
-    System.out.printf("Hello, %s!%n", exporter.outputFile);
+    System.out.printf("Hello, %s!%n", exporter.outputPak);
     return 0;
   }
 }
@@ -165,7 +171,7 @@ final class EncryptCommand extends BaseSubCommand {
   sortOptions = false,
   headerHeading = CLI.DISPLAY_VER + "\n\n" + CLI.DESC + "\n\n",
   synopsisHeading = "Usage:\n\t",
-  customSynopsis = "exporter.exe [options] {--encrypt|--archive|--list-files}\n",
+  customSynopsis = "exporter.exe [options] {--archive|--package|--list-files}\n",
   optionListHeading = "Options:\n",
   commandListHeading = "\nCommands:\n"
 )
@@ -183,18 +189,18 @@ class BaseSubCommand extends BaseCommand {
   protected Exporter exporter;
 
   @CommandLine.Option(
-    names = { "--archive", "-a" },
+    names = { "--package", "-a" },
+    defaultValue = "false",
+    hidden = true
+  )
+  private Boolean packageFlag;
+
+  @CommandLine.Option(
+    names = { "--archive", "-e" },
     defaultValue = "false",
     hidden = true
   )
   private Boolean archiveFlag;
-
-  @CommandLine.Option(
-    names = { "--encrypt", "-e" },
-    defaultValue = "false",
-    hidden = true
-  )
-  private Boolean encryptFlag;
 
   @CommandLine.Option(
     names = { "--list-files", "-l" },
@@ -204,10 +210,10 @@ class BaseSubCommand extends BaseCommand {
   private Boolean listFilesFlag;
 
   protected Integer singleCmdCheck() throws Exception {
-    if (listFilesFlag || archiveFlag || encryptFlag) {
+    if (listFilesFlag || archiveFlag || packageFlag) {
       throw new CommandLine.ParameterException(
         new CommandLine(exporter),
-        "Error: Either use `--encrypt`, `--archive` or `--list-files`, Only One!\n"
+        "Error: Either use `--archive`, `--package` or `--list-files`, Only One!\n"
       );
     }
     return 0;
